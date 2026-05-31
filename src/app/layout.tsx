@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Hind_Siliguri } from "next/font/google";
 
 import "./globals.css";
+import Footer from "@/components/layout/footer";
+import Navbar from "@/components/layout/navbar";
 const hindSiliguri = Hind_Siliguri({
   variable: "--font-bangla",
   subsets: ["bengali"],
@@ -44,7 +46,11 @@ export default function RootLayout({
       `}
     >
       <body className="min-h-screen overflow-x-hidden bg-[#ffffff] text-slate-900 antialiased">
-        <main>{children}</main>
+        <main>
+          <Navbar />
+          {children}
+          <Footer />
+        </main>
       </body>
     </html>
   );

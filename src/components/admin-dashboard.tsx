@@ -45,7 +45,6 @@ export type Order = {
   budget: string | null;
   deadline: string | null;
 };
-
 type Note = {
   id: string;
   order_id: string;
@@ -82,7 +81,6 @@ type FieldDef = {
   long?: boolean;
   image?: boolean;
 };
-
 const FIELDS: FieldDef[] = [
   { key: "name", label: "নাম", section: "বেসিক তথ্য" },
   { key: "whatsapp", label: "WhatsApp", section: "বেসিক তথ্য" },
@@ -133,7 +131,6 @@ const FIELDS: FieldDef[] = [
   { key: "deadline", label: "ডেডলাইন", section: "প্রজেক্ট" },
 ];
 
-// ছবির URL গুলো দেখানোর কম্পোনেন্ট (থাম্বনেইল, ক্লিকে ফুল সাইজ)
 function ImagePreview({ value }: { value: string }) {
   const urls = value.split(",").filter(Boolean);
   if (urls.length === 0) return <span className="text-sm">—</span>;
@@ -143,7 +140,7 @@ function ImagePreview({ value }: { value: string }) {
         <a key={i} href={url} target="_blank" rel="noreferrer">
           <img
             src={url}
-            alt={`img-${i}`}
+            alt=""
             className="h-16 w-16 rounded-md border object-cover hover:ring-2 ring-primary"
           />
         </a>
@@ -171,16 +168,16 @@ export default function AdminDashboard({
   const selected = orders.find((o) => o.id === selectedId) ?? null;
 
   useEffect(() => {
-    const channel = supabase
+    const ch = supabase
       .channel("orders-live")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "orders" },
-        (payload) => setOrders((prev) => [payload.new as Order, ...prev]),
+        (p) => setOrders((prev) => [p.new as Order, ...prev]),
       )
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(ch);
     };
   }, [supabase]);
 
@@ -220,20 +217,20 @@ export default function AdminDashboard({
   }
 
   function startEdit() {
-    if (!selected) return;
-    setEditData({ ...selected });
-    setEditing(true);
+    if (selected) {
+      setEditData({ ...selected });
+      setEditing(true);
+    }
   }
-
   async function saveEdit() {
-    if (!selected || !editData) return;
+    if (!selected) return;
     const { error } = await supabase
       .from("orders")
       .update(editData)
       .eq("id", selected.id);
     if (!error) {
-      setOrders((prev) =>
-        prev.map((o) =>
+      setOrders((p) =>
+        p.map((o) =>
           o.id === selected.id ? ({ ...o, ...editData } as Order) : o,
         ),
       );
@@ -241,7 +238,7 @@ export default function AdminDashboard({
     }
   }
 
-  function getDisplayValue(o: Order, key: keyof Order): string {
+  function getVal(o: Order, key: keyof Order): string {
     if (key === "domain_name")
       return o.domain_status === "have"
         ? (o.domain_name ?? "—")
@@ -252,17 +249,16 @@ export default function AdminDashboard({
       return BUDGET_LABEL[o[key] ?? ""] ?? (o[key] as string) ?? "—";
     return (o[key] as string) ?? "—";
   }
-
   function copyAll(o: Order) {
-    return FIELDS.map(
-      ({ key, label }) => `${label}: ${getDisplayValue(o, key)}`,
-    ).join("\n");
+    return FIELDS.map(({ key, label }) => `${label}: ${getVal(o, key)}`).join(
+      "\n",
+    );
   }
-
   const sections = [...new Set(FIELDS.map((f) => f.section))];
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
+      {/* বাম: চ্যানেল লিস্ট */}
       <aside className="w-72 shrink-0 overflow-y-auto border-r bg-muted/30">
         <div className="p-3 text-sm font-medium text-muted-foreground">
           অর্ডার ({orders.length})
@@ -271,7 +267,7 @@ export default function AdminDashboard({
           <button
             key={o.id}
             onClick={() => setSelectedId(o.id)}
-            className={`flex w-full flex-col items-start gap-1 border-b px-3 py-2.5 text-left text-sm hover:bg-accent ${o.id === selectedId ? "bg-accent" : ""}`}
+            className={`flex w-full flex-col items-start gap-1 border-b px-3 py-2.5 text-left text-sm hover:bg-accent transition-colors ${o.id === selectedId ? "bg-accent" : ""}`}
           >
             <span className="flex w-full items-center justify-between gap-2">
               <span className="truncate font-medium"># {o.name}</span>
@@ -282,189 +278,200 @@ export default function AdminDashboard({
         ))}
       </aside>
 
-      <section className="flex-1 overflow-y-auto p-6">
-        {!selected ? (
-          <p className="text-muted-foreground">একটি অর্ডার সিলেক্ট করুন।</p>
-        ) : (
-          <div className="mx-auto max-w-2xl space-y-6">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <h2 className="text-xl font-semibold"># {selected.name}</h2>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Select
-                  value={selected.status}
-                  onValueChange={(v) => changeStatus(v as Order["status"])}
-                >
-                  <SelectTrigger className="w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">নতুন</SelectItem>
-                    <SelectItem value="in_progress">কাজ চলছে</SelectItem>
-                    <SelectItem value="done">সম্পন্ন</SelectItem>
-                  </SelectContent>
-                </Select>
-                <CopyButton value={copyAll(selected)} label="সব কপি" />
-                {!editing ? (
-                  <Button variant="outline" size="sm" onClick={startEdit}>
-                    ✏️ এডিট
-                  </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={saveEdit}>
-                      💾 সেভ
+      {!selected ? (
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          একটি অর্ডার সিলেক্ট করুন।
+        </div>
+      ) : (
+        <>
+          {/* মাঝে: অর্ডার ডিটেইল */}
+          <section className="flex-1 overflow-y-auto p-6 min-w-0">
+            <div className="max-w-2xl space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h2 className="text-xl font-semibold"># {selected.name}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Select
+                    value={selected.status}
+                    onValueChange={(v) => changeStatus(v as Order["status"])}
+                  >
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">নতুন</SelectItem>
+                      <SelectItem value="in_progress">কাজ চলছে</SelectItem>
+                      <SelectItem value="done">সম্পন্ন</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <CopyButton value={copyAll(selected)} label="সব কপি" />
+                  {!editing ? (
+                    <Button variant="outline" size="sm" onClick={startEdit}>
+                      ✏️ এডিট
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditing(false)}
-                    >
-                      বাতিল
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {sections.map((section) => (
-              <div key={section}>
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider py-2">
-                  {section}
-                </div>
-                <div className="rounded-lg border divide-y">
-                  {FIELDS.filter((f) => f.section === section).map(
-                    ({ key, label, long, image }) => {
-                      const rawVal = (selected[key] as string) ?? "";
-                      const val = getDisplayValue(selected, key);
-                      return (
-                        <div
-                          key={key}
-                          className="flex items-start justify-between gap-3 px-4 py-2.5"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs text-muted-foreground">
-                              {label}
-                            </div>
-                            {editing ? (
-                              image ? (
-                                <FileUpload
-                                  folder={
-                                    key === "logo_url" ? "logos" : "products"
-                                  }
-                                  multiple={key === "product_images_url"}
-                                  value={(editData[key] as string) ?? ""}
-                                  onChange={(u) =>
-                                    setEditData((p) => ({ ...p, [key]: u }))
-                                  }
-                                />
-                              ) : long ? (
-                                <Textarea
-                                  className="mt-1 text-sm"
-                                  rows={2}
-                                  value={(editData[key] as string) ?? ""}
-                                  onChange={(e) =>
-                                    setEditData((p) => ({
-                                      ...p,
-                                      [key]: e.target.value,
-                                    }))
-                                  }
-                                />
-                              ) : (
-                                <Input
-                                  className="mt-1 text-sm h-8"
-                                  value={(editData[key] as string) ?? ""}
-                                  onChange={(e) =>
-                                    setEditData((p) => ({
-                                      ...p,
-                                      [key]: e.target.value,
-                                    }))
-                                  }
-                                />
-                              )
-                            ) : image ? (
-                              <ImagePreview value={rawVal} />
-                            ) : (
-                              <div className="text-sm whitespace-pre-wrap">
-                                {val}
-                              </div>
-                            )}
-                          </div>
-                          {!editing && !image && val && val !== "—" && (
-                            <CopyButton value={val} />
-                          )}
-                        </div>
-                      );
-                    },
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={saveEdit}>
+                        💾 সেভ
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditing(false)}
+                      >
+                        বাতিল
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
-            ))}
 
-            {/* নোট সেকশন — ছবি সহ */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium">অ্যাডমিন নোট</h3>
-              <div className="space-y-2">
-                {notes.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    এখনো কোনো নোট নেই।
-                  </p>
-                )}
-                {notes.map((n) => (
-                  <div
-                    key={n.id}
-                    className="rounded-md border bg-muted/30 p-3 text-sm"
-                  >
-                    {n.content && (
-                      <p className="whitespace-pre-wrap">{n.content}</p>
-                    )}
-                    {n.image_url && (
-                      <a href={n.image_url} target="_blank" rel="noreferrer">
-                        <img
-                          src={n.image_url}
-                          alt="note"
-                          className="mt-2 max-h-48 rounded-md border object-contain"
-                        />
-                      </a>
-                    )}
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(n.created_at).toLocaleString("bn-BD")}
-                    </p>
+              {sections.map((section) => (
+                <div key={section}>
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider py-2">
+                    {section}
                   </div>
-                ))}
-              </div>
-              <div className="space-y-2 rounded-md border p-3">
-                <Textarea
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder="নোট লিখুন..."
-                  rows={2}
-                />
-                <FileUpload
-                  folder="notes"
-                  value={newNoteImage}
-                  onChange={(u) => setNewNoteImage(u)}
-                />
-                <Button
-                  onClick={addNote}
-                  disabled={!newNote.trim() && !newNoteImage}
-                  size="sm"
-                >
-                  নোট যোগ করুন
-                </Button>
-              </div>
+                  <div className="rounded-lg border divide-y">
+                    {FIELDS.filter((f) => f.section === section).map(
+                      ({ key, label, long, image }) => {
+                        const rawVal = (selected[key] as string) ?? "";
+                        const val = getVal(selected, key);
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-start justify-between gap-3 px-4 py-2.5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs text-muted-foreground">
+                                {label}
+                              </div>
+                              {editing ? (
+                                image ? (
+                                  <FileUpload
+                                    folder={
+                                      key === "logo_url" ? "logos" : "products"
+                                    }
+                                    multiple={key === "product_images_url"}
+                                    value={(editData[key] as string) ?? ""}
+                                    onChange={(u) =>
+                                      setEditData((p) => ({ ...p, [key]: u }))
+                                    }
+                                  />
+                                ) : long ? (
+                                  <Textarea
+                                    className="mt-1 text-sm"
+                                    rows={2}
+                                    value={(editData[key] as string) ?? ""}
+                                    onChange={(e) =>
+                                      setEditData((p) => ({
+                                        ...p,
+                                        [key]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                ) : (
+                                  <Input
+                                    className="mt-1 text-sm h-8"
+                                    value={(editData[key] as string) ?? ""}
+                                    onChange={(e) =>
+                                      setEditData((p) => ({
+                                        ...p,
+                                        [key]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                )
+                              ) : image ? (
+                                <ImagePreview value={rawVal} />
+                              ) : (
+                                <div className="text-sm whitespace-pre-wrap">
+                                  {val}
+                                </div>
+                              )}
+                            </div>
+                            {!editing && !image && val && val !== "—" && (
+                              <CopyButton value={val} />
+                            )}
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        )}
-      </section>
+          </section>
+
+          {/* ডান: অ্যাডমিন নোট */}
+          <aside className="w-80 shrink-0 border-l bg-muted/10 flex flex-col h-full">
+            <div className="p-3 border-b text-sm font-medium">
+              📝 অ্যাডমিন নোট
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {notes.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  এখনো কোনো নোট নেই
+                </p>
+              )}
+              {notes.map((n) => (
+                <div
+                  key={n.id}
+                  className="rounded-md border bg-background p-3 text-sm"
+                >
+                  {n.content && (
+                    <p className="whitespace-pre-wrap">{n.content}</p>
+                  )}
+                  {n.image_url && (
+                    <a href={n.image_url} target="_blank" rel="noreferrer">
+                      <img
+                        src={n.image_url}
+                        alt=""
+                        className="mt-2 max-h-40 rounded-md border object-contain"
+                      />
+                    </a>
+                  )}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {new Date(n.created_at).toLocaleString("bn-BD")}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t p-3 space-y-2">
+              <Textarea
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="নোট লিখুন..."
+                rows={2}
+                className="text-sm"
+              />
+              <FileUpload
+                folder="notes"
+                value={newNoteImage}
+                onChange={(u) => setNewNoteImage(u)}
+              />
+              <Button
+                onClick={addNote}
+                disabled={!newNote.trim() && !newNoteImage}
+                size="sm"
+                className="w-full"
+              >
+                নোট যোগ করুন
+              </Button>
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: Order["status"] }) {
-  const variant =
+  const v =
     status === "done"
       ? "default"
       : status === "in_progress"
         ? "secondary"
         : "outline";
-  return <Badge variant={variant as never}>{STATUS_LABEL[status]}</Badge>;
+  return <Badge variant={v as never}>{STATUS_LABEL[status]}</Badge>;
 }
