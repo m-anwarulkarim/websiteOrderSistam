@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { CopyButton } from "@/components/copy-button";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -13,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CopyButton } from "./copy-button";
 
 export type Order = {
   id: string;
@@ -30,6 +31,18 @@ export type Order = {
   password: string | null;
   status: "new" | "in_progress" | "done";
   created_at: string;
+  logo_url: string | null;
+  brand_colors: string | null;
+  tagline: string | null;
+  website_type: string | null;
+  page_count: string | null;
+  reference_websites: string | null;
+  special_features: string | null;
+  about_us: string | null;
+  services_list: string | null;
+  product_images_url: string | null;
+  budget: string | null;
+  deadline: string | null;
 };
 
 type Note = {
@@ -45,17 +58,80 @@ const STATUS_LABEL: Record<Order["status"], string> = {
   done: "সম্পন্ন",
 };
 
-const FIELDS: { key: keyof Order; label: string }[] = [
-  { key: "name", label: "নাম" },
-  { key: "whatsapp", label: "WhatsApp" },
-  { key: "domain_name", label: "ডোমেইন" },
-  { key: "office_address", label: "ঠিকানা" },
-  { key: "hotline", label: "হটলাইন" },
-  { key: "fb_page", label: "Facebook" },
-  { key: "youtube", label: "YouTube" },
-  { key: "other_socials", label: "অন্যান্য সোশ্যাল" },
-  { key: "gmail", label: "Gmail" },
-  { key: "password", label: "Password" },
+const BUDGET_LABEL: Record<string, string> = {
+  under_5k: "৫,০০০ এর নিচে",
+  "5k_10k": "৫-১০ হাজার",
+  "10k_20k": "১০-২০ হাজার",
+  "20k_50k": "২০-৫০ হাজার",
+  "50k_plus": "৫০ হাজার+",
+};
+
+const WEBSITE_TYPE_LABEL: Record<string, string> = {
+  business: "ব্যবসায়িক",
+  ecommerce: "ই-কমার্স",
+  portfolio: "পোর্টফোলিও",
+  blog: "ব্লগ",
+  landing: "ল্যান্ডিং পেজ",
+  other: "অন্যান্য",
+};
+
+type FieldDef = {
+  key: keyof Order;
+  label: string;
+  section: string;
+  long?: boolean;
+};
+
+const FIELDS: FieldDef[] = [
+  // বেসিক
+  { key: "name", label: "নাম", section: "বেসিক তথ্য" },
+  { key: "whatsapp", label: "WhatsApp", section: "বেসিক তথ্য" },
+  { key: "office_address", label: "ঠিকানা", section: "বেসিক তথ্য", long: true },
+  { key: "hotline", label: "হটলাইন", section: "বেসিক তথ্য" },
+  { key: "gmail", label: "Gmail", section: "বেসিক তথ্য" },
+  { key: "password", label: "Password", section: "বেসিক তথ্য" },
+  // ডোমেইন
+  { key: "domain_name", label: "ডোমেইন", section: "ডোমেইন" },
+  // সোশ্যাল
+  { key: "fb_page", label: "Facebook", section: "সোশ্যাল" },
+  { key: "youtube", label: "YouTube", section: "সোশ্যাল" },
+  {
+    key: "other_socials",
+    label: "অন্যান্য সোশ্যাল",
+    section: "সোশ্যাল",
+    long: true,
+  },
+  // ব্র্যান্ডিং
+  { key: "logo_url", label: "লোগো লিংক", section: "ব্র্যান্ডিং" },
+  { key: "brand_colors", label: "ব্র্যান্ড কালার", section: "ব্র্যান্ডিং" },
+  { key: "tagline", label: "ট্যাগলাইন", section: "ব্র্যান্ডিং" },
+  // ওয়েবসাইট
+  { key: "website_type", label: "সাইটের ধরন", section: "ওয়েবসাইট" },
+  { key: "page_count", label: "পেজ সংখ্যা", section: "ওয়েবসাইট" },
+  {
+    key: "reference_websites",
+    label: "রেফারেন্স সাইট",
+    section: "ওয়েবসাইট",
+    long: true,
+  },
+  {
+    key: "special_features",
+    label: "স্পেশাল ফিচার",
+    section: "ওয়েবসাইট",
+    long: true,
+  },
+  // কন্টেন্ট
+  { key: "about_us", label: "About Us", section: "কন্টেন্ট", long: true },
+  {
+    key: "services_list",
+    label: "সার্ভিস লিস্ট",
+    section: "কন্টেন্ট",
+    long: true,
+  },
+  { key: "product_images_url", label: "প্রোডাক্ট ছবি", section: "কন্টেন্ট" },
+  // প্রজেক্ট
+  { key: "budget", label: "বাজেট", section: "প্রজেক্ট" },
+  { key: "deadline", label: "ডেডলাইন", section: "প্রজেক্ট" },
 ];
 
 export default function AdminDashboard({
@@ -70,10 +146,12 @@ export default function AdminDashboard({
   );
   const [notes, setNotes] = useState<Note[]>([]);
   const [newNote, setNewNote] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editData, setEditData] = useState<Partial<Order>>({});
 
   const selected = orders.find((o) => o.id === selectedId) ?? null;
 
-  // নতুন order live-আপডেট
+  // Realtime নতুন order
   useEffect(() => {
     const channel = supabase
       .channel("orders-live")
@@ -88,7 +166,7 @@ export default function AdminDashboard({
     };
   }, [supabase]);
 
-  // সিলেক্টেড order-এর নোট লোড
+  // নোট লোড
   useEffect(() => {
     if (!selectedId) return;
     supabase
@@ -96,7 +174,10 @@ export default function AdminDashboard({
       .select("*")
       .eq("order_id", selectedId)
       .order("created_at", { ascending: true })
-      .then(({ data }) => setNotes((data as Note[]) ?? []));
+      .then(({ data }) => {
+        setNotes((data as Note[]) ?? []);
+        setEditing(false);
+      });
   }, [selectedId, supabase]);
 
   async function addNote() {
@@ -118,21 +199,47 @@ export default function AdminDashboard({
     );
   }
 
-  function copyAll(o: Order) {
-    const lines = [
-      `নাম: ${o.name}`,
-      `WhatsApp: ${o.whatsapp}`,
-      `ডোমেইন: ${o.domain_status === "have" ? (o.domain_name ?? "") : "নতুন লাগবে"}`,
-      `ঠিকানা: ${o.office_address ?? ""}`,
-      `হটলাইন: ${o.hotline ?? ""}`,
-      `Facebook: ${o.fb_page ?? ""}`,
-      `YouTube: ${o.youtube ?? ""}`,
-      `অন্যান্য: ${o.other_socials ?? ""}`,
-      `Gmail: ${o.gmail ?? ""}`,
-      `Password: ${o.password ?? ""}`,
-    ];
-    return lines.join("\n");
+  function startEdit() {
+    if (!selected) return;
+    setEditData({ ...selected });
+    setEditing(true);
   }
+
+  async function saveEdit() {
+    if (!selected || !editData) return;
+    const { error } = await supabase
+      .from("orders")
+      .update(editData)
+      .eq("id", selected.id);
+    if (!error) {
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === selected.id ? ({ ...o, ...editData } as Order) : o,
+        ),
+      );
+      setEditing(false);
+    }
+  }
+
+  function getDisplayValue(o: Order, key: keyof Order): string {
+    if (key === "domain_name")
+      return o.domain_status === "have"
+        ? (o.domain_name ?? "—")
+        : "নতুন ডোমেইন লাগবে";
+    if (key === "website_type")
+      return WEBSITE_TYPE_LABEL[o[key] ?? ""] ?? (o[key] as string) ?? "—";
+    if (key === "budget")
+      return BUDGET_LABEL[o[key] ?? ""] ?? (o[key] as string) ?? "—";
+    return (o[key] as string) ?? "—";
+  }
+
+  function copyAll(o: Order) {
+    return FIELDS.map(
+      ({ key, label }) => `${label}: ${getDisplayValue(o, key)}`,
+    ).join("\n");
+  }
+
+  const sections = [...new Set(FIELDS.map((f) => f.section))];
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
@@ -145,9 +252,7 @@ export default function AdminDashboard({
           <button
             key={o.id}
             onClick={() => setSelectedId(o.id)}
-            className={`flex w-full flex-col items-start gap-1 border-b px-3 py-2.5 text-left text-sm hover:bg-accent ${
-              o.id === selectedId ? "bg-accent" : ""
-            }`}
+            className={`flex w-full flex-col items-start gap-1 border-b px-3 py-2.5 text-left text-sm hover:bg-accent ${o.id === selectedId ? "bg-accent" : ""}`}
           >
             <span className="flex w-full items-center justify-between gap-2">
               <span className="truncate font-medium"># {o.name}</span>
@@ -164,9 +269,9 @@ export default function AdminDashboard({
           <p className="text-muted-foreground">একটি অর্ডার সিলেক্ট করুন।</p>
         ) : (
           <div className="mx-auto max-w-2xl space-y-6">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-xl font-semibold"># {selected.name}</h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Select
                   value={selected.status}
                   onValueChange={(v) => changeStatus(v as Order["status"])}
@@ -181,37 +286,87 @@ export default function AdminDashboard({
                   </SelectContent>
                 </Select>
                 <CopyButton value={copyAll(selected)} label="সব কপি" />
+                {!editing ? (
+                  <Button variant="outline" size="sm" onClick={startEdit}>
+                    ✏️ এডিট
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={saveEdit}>
+                      💾 সেভ
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditing(false)}
+                    >
+                      বাতিল
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* ফিল্ডগুলো — প্রতিটার পাশে কপি বাটন */}
-            <div className="rounded-lg border divide-y">
-              {FIELDS.map(({ key, label }) => {
-                let val: string;
-                if (key === "domain_name") {
-                  val =
-                    selected.domain_status === "have"
-                      ? (selected.domain_name ?? "—")
-                      : "নতুন ডোমেইন লাগবে";
-                } else {
-                  val = (selected[key] as string) ?? "—";
-                }
-                return (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-xs text-muted-foreground">
-                        {label}
-                      </div>
-                      <div className="truncate text-sm">{val}</div>
-                    </div>
-                    {val && val !== "—" && <CopyButton value={val} />}
-                  </div>
-                );
-              })}
-            </div>
+            {/* ফিল্ডগুলো — সেকশন অনুযায়ী */}
+            {sections.map((section) => (
+              <div key={section}>
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider py-2">
+                  {section}
+                </div>
+                <div className="rounded-lg border divide-y">
+                  {FIELDS.filter((f) => f.section === section).map(
+                    ({ key, label, long }) => {
+                      const val = getDisplayValue(selected, key);
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-start justify-between gap-3 px-4 py-2.5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs text-muted-foreground">
+                              {label}
+                            </div>
+                            {editing ? (
+                              long ? (
+                                <Textarea
+                                  className="mt-1 text-sm"
+                                  rows={2}
+                                  value={(editData[key] as string) ?? ""}
+                                  onChange={(e) =>
+                                    setEditData((p) => ({
+                                      ...p,
+                                      [key]: e.target.value,
+                                    }))
+                                  }
+                                />
+                              ) : (
+                                <Input
+                                  className="mt-1 text-sm h-8"
+                                  value={(editData[key] as string) ?? ""}
+                                  onChange={(e) =>
+                                    setEditData((p) => ({
+                                      ...p,
+                                      [key]: e.target.value,
+                                    }))
+                                  }
+                                />
+                              )
+                            ) : (
+                              <div className="text-sm whitespace-pre-wrap">
+                                {val}
+                              </div>
+                            )}
+                          </div>
+                          {!editing && val && val !== "—" && (
+                            <CopyButton value={val} />
+                          )}
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+              </div>
+            ))}
 
             {/* নোট সেকশন */}
             <div className="space-y-3">
