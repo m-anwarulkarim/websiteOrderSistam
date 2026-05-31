@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { zodValidator } from "@tanstack/zod-form-adapter";
+import type { z } from "zod";
 
 import { orderSchema } from "@/lib/order-schema";
 import { normalizeWhatsapp } from "@/lib/utils";
@@ -28,42 +29,48 @@ import {
 } from "@/components/ui/field";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+type OrderFormValues = z.input<typeof orderSchema>;
+
+const defaultValues: OrderFormValues = {
+  name: "",
+  whatsapp: "",
+  domain_status: "need",
+  domain_name: "",
+  office_address: "",
+  hotline: "",
+  fb_page: "",
+  youtube: "",
+  other_socials: "",
+  gmail: "",
+  password: "",
+};
+
 export default function OrderForm() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm({
-    defaultValues: {
-      name: "",
-      whatsapp: "",
-      domain_status: "" as "have" | "need" | "",
-      domain_name: "",
-      office_address: "",
-      hotline: "",
-      fb_page: "",
-      youtube: "",
-      other_socials: "",
-      gmail: "",
-      password: "",
+    defaultValues,
+    validators: {
+      onSubmit: orderSchema,
     },
-    validatorAdapter: zodValidator(),
-    validators: { onSubmit: orderSchema },
     onSubmit: async ({ value }) => {
       setServerError(null);
+
       const supabase = createClient();
 
       const { error } = await supabase.rpc("create_order", {
         p_name: value.name,
         p_whatsapp: normalizeWhatsapp(value.whatsapp),
         p_domain_status: value.domain_status,
-        p_domain_name: value.domain_name,
-        p_office_address: value.office_address,
-        p_hotline: value.hotline,
-        p_fb_page: value.fb_page,
-        p_youtube: value.youtube,
-        p_other_socials: value.other_socials,
-        p_gmail: value.gmail,
-        p_password: value.password,
+        p_domain_name: value.domain_name ?? "",
+        p_office_address: value.office_address ?? "",
+        p_hotline: value.hotline ?? "",
+        p_fb_page: value.fb_page ?? "",
+        p_youtube: value.youtube ?? "",
+        p_other_socials: value.other_socials ?? "",
+        p_gmail: value.gmail ?? "",
+        p_password: value.password ?? "",
       });
 
       if (error) {
@@ -74,8 +81,10 @@ export default function OrderForm() {
         } else {
           setServerError("কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।");
         }
+
         return;
       }
+
       router.push("/thank-you");
     },
   });
@@ -101,6 +110,7 @@ export default function OrderForm() {
           {(field) => {
             const invalid =
               field.state.meta.isTouched && !field.state.meta.isValid;
+
             return (
               <Field data-invalid={invalid}>
                 <FieldLabel htmlFor={field.name}>আপনার নাম *</FieldLabel>
@@ -123,6 +133,7 @@ export default function OrderForm() {
           {(field) => {
             const invalid =
               field.state.meta.isTouched && !field.state.meta.isValid;
+
             return (
               <Field data-invalid={invalid}>
                 <FieldLabel htmlFor={field.name}>WhatsApp নাম্বার *</FieldLabel>
@@ -149,13 +160,16 @@ export default function OrderForm() {
           {(field) => {
             const invalid =
               field.state.meta.isTouched && !field.state.meta.isValid;
+
             return (
               <Field data-invalid={invalid}>
                 <FieldLabel htmlFor={field.name}>ডোমেইন *</FieldLabel>
                 <Select
                   value={field.state.value}
-                  onValueChange={(v) =>
-                    field.handleChange(v as "have" | "need")
+                  onValueChange={(value) =>
+                    field.handleChange(
+                      value as OrderFormValues["domain_status"],
+                    )
                   }
                 >
                   <SelectTrigger id={field.name} aria-invalid={invalid}>
@@ -172,20 +186,21 @@ export default function OrderForm() {
           }}
         </form.Field>
 
-        {/* domain_name — শুধু "আছে" হলে দেখাবে (conditional) */}
-        <form.Subscribe selector={(s) => s.values.domain_status}>
+        {/* domain_name — শুধু "আছে" হলে দেখাবে */}
+        <form.Subscribe selector={(state) => state.values.domain_status}>
           {(domainStatus) =>
             domainStatus === "have" ? (
               <form.Field name="domain_name">
                 {(field) => {
                   const invalid =
                     field.state.meta.isTouched && !field.state.meta.isValid;
+
                   return (
                     <Field data-invalid={invalid}>
                       <FieldLabel htmlFor={field.name}>ডোমেইন নাম *</FieldLabel>
                       <Input
                         id={field.name}
-                        value={field.state.value}
+                        value={field.state.value ?? ""}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
                         aria-invalid={invalid}
@@ -209,7 +224,7 @@ export default function OrderForm() {
               <FieldLabel htmlFor={field.name}>অফিসের ঠিকানা</FieldLabel>
               <Textarea
                 id={field.name}
-                value={field.state.value}
+                value={field.state.value ?? ""}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder="পূর্ণ ঠিকানা লিখুন"
               />
@@ -224,7 +239,7 @@ export default function OrderForm() {
               <FieldLabel htmlFor={field.name}>হটলাইন নাম্বার</FieldLabel>
               <Input
                 id={field.name}
-                value={field.state.value}
+                value={field.state.value ?? ""}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder="যেমন: 16xxx"
               />
@@ -239,7 +254,7 @@ export default function OrderForm() {
               <FieldLabel htmlFor={field.name}>Facebook পেজ লিংক</FieldLabel>
               <Input
                 id={field.name}
-                value={field.state.value}
+                value={field.state.value ?? ""}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder="https://facebook.com/..."
               />
@@ -254,7 +269,7 @@ export default function OrderForm() {
               <FieldLabel htmlFor={field.name}>YouTube লিংক</FieldLabel>
               <Input
                 id={field.name}
-                value={field.state.value}
+                value={field.state.value ?? ""}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder="https://youtube.com/@..."
               />
@@ -271,7 +286,7 @@ export default function OrderForm() {
               </FieldLabel>
               <Textarea
                 id={field.name}
-                value={field.state.value}
+                value={field.state.value ?? ""}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder="Instagram, TikTok, LinkedIn ইত্যাদি (প্রতি লাইনে একটি)"
               />
@@ -284,13 +299,14 @@ export default function OrderForm() {
           {(field) => {
             const invalid =
               field.state.meta.isTouched && !field.state.meta.isValid;
+
             return (
               <Field data-invalid={invalid}>
                 <FieldLabel htmlFor={field.name}>Gmail</FieldLabel>
                 <Input
                   id={field.name}
                   type="email"
-                  value={field.state.value}
+                  value={field.state.value ?? ""}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
                   aria-invalid={invalid}
@@ -309,7 +325,8 @@ export default function OrderForm() {
               <FieldLabel htmlFor={field.name}>Password</FieldLabel>
               <Input
                 id={field.name}
-                value={field.state.value}
+                type="password"
+                value={field.state.value ?? ""}
                 onChange={(e) => field.handleChange(e.target.value)}
                 placeholder="সংশ্লিষ্ট অ্যাকাউন্টের পাসওয়ার্ড"
               />
@@ -318,7 +335,9 @@ export default function OrderForm() {
         </form.Field>
       </FieldGroup>
 
-      <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting]}>
+      <form.Subscribe
+        selector={(state) => [state.canSubmit, state.isSubmitting]}
+      >
         {([canSubmit, isSubmitting]) => (
           <Button type="submit" disabled={!canSubmit} className="w-full">
             {isSubmitting ? "জমা হচ্ছে..." : "ফর্ম জমা দিন"}
