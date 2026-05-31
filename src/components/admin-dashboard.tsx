@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { CopyButton } from "@/components/copy-button";
+import { FileUpload } from "@/components/file-upload";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,7 @@ type Note = {
   id: string;
   order_id: string;
   content: string;
+  image_url: string | null;
   created_at: string;
 };
 
@@ -57,7 +59,6 @@ const STATUS_LABEL: Record<Order["status"], string> = {
   in_progress: "কাজ চলছে",
   done: "সম্পন্ন",
 };
-
 const BUDGET_LABEL: Record<string, string> = {
   under_5k: "৫,০০০ এর নিচে",
   "5k_10k": "৫-১০ হাজার",
@@ -65,7 +66,6 @@ const BUDGET_LABEL: Record<string, string> = {
   "20k_50k": "২০-৫০ হাজার",
   "50k_plus": "৫০ হাজার+",
 };
-
 const WEBSITE_TYPE_LABEL: Record<string, string> = {
   business: "ব্যবসায়িক",
   ecommerce: "ই-কমার্স",
@@ -80,19 +80,17 @@ type FieldDef = {
   label: string;
   section: string;
   long?: boolean;
+  image?: boolean;
 };
 
 const FIELDS: FieldDef[] = [
-  // বেসিক
   { key: "name", label: "নাম", section: "বেসিক তথ্য" },
   { key: "whatsapp", label: "WhatsApp", section: "বেসিক তথ্য" },
   { key: "office_address", label: "ঠিকানা", section: "বেসিক তথ্য", long: true },
   { key: "hotline", label: "হটলাইন", section: "বেসিক তথ্য" },
   { key: "gmail", label: "Gmail", section: "বেসিক তথ্য" },
   { key: "password", label: "Password", section: "বেসিক তথ্য" },
-  // ডোমেইন
   { key: "domain_name", label: "ডোমেইন", section: "ডোমেইন" },
-  // সোশ্যাল
   { key: "fb_page", label: "Facebook", section: "সোশ্যাল" },
   { key: "youtube", label: "YouTube", section: "সোশ্যাল" },
   {
@@ -101,11 +99,9 @@ const FIELDS: FieldDef[] = [
     section: "সোশ্যাল",
     long: true,
   },
-  // ব্র্যান্ডিং
-  { key: "logo_url", label: "লোগো লিংক", section: "ব্র্যান্ডিং" },
+  { key: "logo_url", label: "লোগো", section: "ব্র্যান্ডিং", image: true },
   { key: "brand_colors", label: "ব্র্যান্ড কালার", section: "ব্র্যান্ডিং" },
   { key: "tagline", label: "ট্যাগলাইন", section: "ব্র্যান্ডিং" },
-  // ওয়েবসাইট
   { key: "website_type", label: "সাইটের ধরন", section: "ওয়েবসাইট" },
   { key: "page_count", label: "পেজ সংখ্যা", section: "ওয়েবসাইট" },
   {
@@ -120,7 +116,6 @@ const FIELDS: FieldDef[] = [
     section: "ওয়েবসাইট",
     long: true,
   },
-  // কন্টেন্ট
   { key: "about_us", label: "About Us", section: "কন্টেন্ট", long: true },
   {
     key: "services_list",
@@ -128,11 +123,34 @@ const FIELDS: FieldDef[] = [
     section: "কন্টেন্ট",
     long: true,
   },
-  { key: "product_images_url", label: "প্রোডাক্ট ছবি", section: "কন্টেন্ট" },
-  // প্রজেক্ট
+  {
+    key: "product_images_url",
+    label: "প্রোডাক্ট ছবি",
+    section: "কন্টেন্ট",
+    image: true,
+  },
   { key: "budget", label: "বাজেট", section: "প্রজেক্ট" },
   { key: "deadline", label: "ডেডলাইন", section: "প্রজেক্ট" },
 ];
+
+// ছবির URL গুলো দেখানোর কম্পোনেন্ট (থাম্বনেইল, ক্লিকে ফুল সাইজ)
+function ImagePreview({ value }: { value: string }) {
+  const urls = value.split(",").filter(Boolean);
+  if (urls.length === 0) return <span className="text-sm">—</span>;
+  return (
+    <div className="flex flex-wrap gap-2 mt-1">
+      {urls.map((url, i) => (
+        <a key={i} href={url} target="_blank" rel="noreferrer">
+          <img
+            src={url}
+            alt={`img-${i}`}
+            className="h-16 w-16 rounded-md border object-cover hover:ring-2 ring-primary"
+          />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 export default function AdminDashboard({
   initialOrders,
@@ -146,12 +164,12 @@ export default function AdminDashboard({
   );
   const [notes, setNotes] = useState<Note[]>([]);
   const [newNote, setNewNote] = useState("");
+  const [newNoteImage, setNewNoteImage] = useState("");
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Order>>({});
 
   const selected = orders.find((o) => o.id === selectedId) ?? null;
 
-  // Realtime নতুন order
   useEffect(() => {
     const channel = supabase
       .channel("orders-live")
@@ -166,7 +184,6 @@ export default function AdminDashboard({
     };
   }, [supabase]);
 
-  // নোট লোড
   useEffect(() => {
     if (!selectedId) return;
     supabase
@@ -174,21 +191,24 @@ export default function AdminDashboard({
       .select("*")
       .eq("order_id", selectedId)
       .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        setNotes((data as Note[]) ?? []);
-        setEditing(false);
-      });
+      .then(({ data }) => setNotes((data as Note[]) ?? []));
+    setEditing(false);
   }, [selectedId, supabase]);
 
   async function addNote() {
-    if (!newNote.trim() || !selectedId) return;
+    if ((!newNote.trim() && !newNoteImage) || !selectedId) return;
     const { data } = await supabase
       .from("notes")
-      .insert({ order_id: selectedId, content: newNote.trim() })
+      .insert({
+        order_id: selectedId,
+        content: newNote.trim(),
+        image_url: newNoteImage || null,
+      })
       .select()
       .single();
     if (data) setNotes((prev) => [...prev, data as Note]);
     setNewNote("");
+    setNewNoteImage("");
   }
 
   async function changeStatus(status: Order["status"]) {
@@ -243,7 +263,6 @@ export default function AdminDashboard({
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
-      {/* বাম: চ্যানেল লিস্ট */}
       <aside className="w-72 shrink-0 overflow-y-auto border-r bg-muted/30">
         <div className="p-3 text-sm font-medium text-muted-foreground">
           অর্ডার ({orders.length})
@@ -263,7 +282,6 @@ export default function AdminDashboard({
         ))}
       </aside>
 
-      {/* ডান: ডিটেইল */}
       <section className="flex-1 overflow-y-auto p-6">
         {!selected ? (
           <p className="text-muted-foreground">একটি অর্ডার সিলেক্ট করুন।</p>
@@ -307,7 +325,6 @@ export default function AdminDashboard({
               </div>
             </div>
 
-            {/* ফিল্ডগুলো — সেকশন অনুযায়ী */}
             {sections.map((section) => (
               <div key={section}>
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider py-2">
@@ -315,7 +332,8 @@ export default function AdminDashboard({
                 </div>
                 <div className="rounded-lg border divide-y">
                   {FIELDS.filter((f) => f.section === section).map(
-                    ({ key, label, long }) => {
+                    ({ key, label, long, image }) => {
+                      const rawVal = (selected[key] as string) ?? "";
                       const val = getDisplayValue(selected, key);
                       return (
                         <div
@@ -327,7 +345,18 @@ export default function AdminDashboard({
                               {label}
                             </div>
                             {editing ? (
-                              long ? (
+                              image ? (
+                                <FileUpload
+                                  folder={
+                                    key === "logo_url" ? "logos" : "products"
+                                  }
+                                  multiple={key === "product_images_url"}
+                                  value={(editData[key] as string) ?? ""}
+                                  onChange={(u) =>
+                                    setEditData((p) => ({ ...p, [key]: u }))
+                                  }
+                                />
+                              ) : long ? (
                                 <Textarea
                                   className="mt-1 text-sm"
                                   rows={2}
@@ -351,13 +380,15 @@ export default function AdminDashboard({
                                   }
                                 />
                               )
+                            ) : image ? (
+                              <ImagePreview value={rawVal} />
                             ) : (
                               <div className="text-sm whitespace-pre-wrap">
                                 {val}
                               </div>
                             )}
                           </div>
-                          {!editing && val && val !== "—" && (
+                          {!editing && !image && val && val !== "—" && (
                             <CopyButton value={val} />
                           )}
                         </div>
@@ -368,7 +399,7 @@ export default function AdminDashboard({
               </div>
             ))}
 
-            {/* নোট সেকশন */}
+            {/* নোট সেকশন — ছবি সহ */}
             <div className="space-y-3">
               <h3 className="text-sm font-medium">অ্যাডমিন নোট</h3>
               <div className="space-y-2">
@@ -382,22 +413,42 @@ export default function AdminDashboard({
                     key={n.id}
                     className="rounded-md border bg-muted/30 p-3 text-sm"
                   >
-                    <p className="whitespace-pre-wrap">{n.content}</p>
+                    {n.content && (
+                      <p className="whitespace-pre-wrap">{n.content}</p>
+                    )}
+                    {n.image_url && (
+                      <a href={n.image_url} target="_blank" rel="noreferrer">
+                        <img
+                          src={n.image_url}
+                          alt="note"
+                          className="mt-2 max-h-48 rounded-md border object-contain"
+                        />
+                      </a>
+                    )}
                     <p className="mt-1 text-xs text-muted-foreground">
                       {new Date(n.created_at).toLocaleString("bn-BD")}
                     </p>
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2">
+              <div className="space-y-2 rounded-md border p-3">
                 <Textarea
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
                   placeholder="নোট লিখুন..."
                   rows={2}
                 />
-                <Button onClick={addNote} disabled={!newNote.trim()}>
-                  যোগ করুন
+                <FileUpload
+                  folder="notes"
+                  value={newNoteImage}
+                  onChange={(u) => setNewNoteImage(u)}
+                />
+                <Button
+                  onClick={addNote}
+                  disabled={!newNote.trim() && !newNoteImage}
+                  size="sm"
+                >
+                  নোট যোগ করুন
                 </Button>
               </div>
             </div>

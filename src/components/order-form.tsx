@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { FileUpload } from "@/components/file-upload";
 import {
   Select,
   SelectContent,
@@ -215,8 +216,8 @@ export default function OrderForm() {
               <Field data-invalid={invalid}>
                 <FieldLabel htmlFor={field.name}>Gmail</FieldLabel>
                 <FieldDescription>
-                  এই Gmail এবং Password ব্যবহার করে আপনার জন্য ওয়েবসাইট তৈরি করা
-                  হবে। ওয়েবসাইটের প্রয়োজনীয় সেটআপ, অ্যাকাউন্ট কানেকশন এবং
+                  এই Gmail এবং Password ব্যবহার করে আপনার জন্য ওয়েবসাইট তৈরি
+                  করা হবে। ওয়েবসাইটের প্রয়োজনীয় সেটআপ, অ্যাকাউন্ট কানেকশন এবং
                   ডেভেলপমেন্ট কাজের জন্য এই তথ্যগুলো দরকার হবে। আপনার তথ্য
                   নিরাপদে ব্যবহার করা হবে ।
                 </FieldDescription>
@@ -363,17 +364,13 @@ export default function OrderForm() {
         <form.Field name="logo_url">
           {(field) => (
             <Field>
-              <FieldLabel htmlFor={field.name}>লোগো (লিংক)</FieldLabel>
-              <Input
-                id={field.name}
+              <FieldLabel>লোগো আপলোড করুন</FieldLabel>
+              <FileUpload
+                folder="logos"
                 value={field.state.value ?? ""}
-                onChange={(e) => field.handleChange(e.target.value)}
-                placeholder="Google Drive / Dropbox লিংক"
+                onChange={(url) => field.handleChange(url)}
               />
-              <FieldDescription>
-                লোগো ফাইল Google Drive বা Dropbox-এ আপলোড করে শেয়ারেবল লিংক
-                দিন।
-              </FieldDescription>
+              <FieldDescription>সর্বোচ্চ ৫MB, PNG/JPG</FieldDescription>
             </Field>
           )}
         </form.Field>
@@ -493,23 +490,23 @@ export default function OrderForm() {
         <form.Field name="product_images_url">
           {(field) => (
             <Field>
-              <FieldLabel htmlFor={field.name}>প্রোডাক্ট ছবি (লিংক)</FieldLabel>
-              <Input
-                id={field.name}
+              <FieldLabel>প্রোডাক্ট ছবি আপলোড করুন</FieldLabel>
+              <FileUpload
+                folder="products"
+                multiple
                 value={field.state.value ?? ""}
-                onChange={(e) => field.handleChange(e.target.value)}
-                placeholder="Google Drive ফোল্ডার লিংক"
+                onChange={(urls) => field.handleChange(urls)}
               />
               <FieldDescription>
-                ছবিগুলো একটা ফোল্ডারে রেখে শেয়ারেবল লিংক দিন।
+                একাধিক ছবি দিতে পারবেন, সর্বোচ্চ ৫MB প্রতিটা
               </FieldDescription>
             </Field>
           )}
         </form.Field>
       </FieldGroup>
 
-      {/* ========== সেকশন ৭: বাজেট ও সময় ========== */}
-      <SectionTitle> সময়সীমা</SectionTitle>
+      {/* ========== সেকশন ৭: সময়সীমা ========== */}
+      <SectionTitle>⏰ সময়সীমা</SectionTitle>
       <FieldGroup>
         <form.Field name="deadline">
           {(field) => (
